@@ -1,12 +1,22 @@
 import { prisma } from '@/lib/prisma';
-import { calculatePercentageChange } from '@/lib/metrics';
+import { calculatePercentageChange, isThresholdBreached } from '@/lib/metrics';
 import { NextResponse } from 'next/server';
+
+const THRESHOLD = 10;
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ appId: string }> }
 ) {
   const { appId } = await params;
+
+  const app = await prisma.app.findUnique({
+    where: { id: Number(appId) },
+  });
+
+  if (!app) {
+    return NextResponse.json({ error: 'App not found' }, { status: 404 });
+  }
 
   const campaigns = await prisma.campaign.findMany({
     where: { appId: Number(appId) },
@@ -41,6 +51,11 @@ export async function GET(
     const baselineCpi =
       baselineInstalls > 0 ? baselineSpend / baselineInstalls : 0;
 
+    const spendChange = calculatePercentageChange(currentSpend, baselineSpend);
+    const installsChange = calculatePercentageChange(currentInstalls, baselineInstalls);
+    const cpiChange = calculatePercentageChange(currentCpi, baselineCpi);
+    const revenueChange = calculatePercentageChange(currentRevenue, baselineRevenue);
+
     return {
       id: campaign.id,
       name: campaign.name,
@@ -48,21 +63,22 @@ export async function GET(
       platform: campaign.platform,
       currentSpend: Math.round(currentSpend * 100) / 100,
       baselineSpend: Math.round(baselineSpend * 100) / 100,
-      spendChange: calculatePercentageChange(currentSpend, baselineSpend),
+      spendChange,
+      spendBreached: isThresholdBreached(spendChange, THRESHOLD),
       currentInstalls,
       baselineInstalls,
-      installsChange: calculatePercentageChange(
-        currentInstalls,
-        baselineInstalls
-      ),
+      installsChange,
+      installsBreached: isThresholdBreached(installsChange, THRESHOLD),
       currentCpi: Math.round(currentCpi * 100) / 100,
       baselineCpi: Math.round(baselineCpi * 100) / 100,
-      cpiChange: calculatePercentageChange(currentCpi, baselineCpi),
+      cpiChange,
+      cpiBreached: isThresholdBreached(cpiChange, THRESHOLD),
       currentRevenue: Math.round(currentRevenue * 100) / 100,
       baselineRevenue: Math.round(baselineRevenue * 100) / 100,
-      revenueChange: calculatePercentageChange(currentRevenue, baselineRevenue),
+      revenueChange,
+      revenueBreached: isThresholdBreached(revenueChange, THRESHOLD),
     };
   });
 
-  return NextResponse.json(summaries);
+  return NextResponse.json({ appName: app.name, campaigns: summaries });
 }
