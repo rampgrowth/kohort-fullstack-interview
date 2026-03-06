@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Company {
+  id   Int    @id @default(autoincrement())
+  name String
+  apps App[]
+}
+
+model App {
+  id        Int        @id @default(autoincrement())
+  name      String
+  companyId Int
+  company   Company    @relation(fields: [companyId], references: [id])
+  campaigns Campaign[]
+}
+
+model Campaign {
+  id       Int              @id @default(autoincrement())
+  name     String
+  network  String
+  platform String
+  appId    Int
+  app      App              @relation(fields: [appId], references: [id])
+  metrics  CampaignMetric[]
+}
+
+model CampaignMetric {
+  id         Int      @id @default(autoincrement())
+  campaignId Int
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  date       DateTime
+  spend      Float
+  installs   Int
+  revenue    Float
+}
